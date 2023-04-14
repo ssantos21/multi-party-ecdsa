@@ -78,6 +78,11 @@ pub struct PartialSig {
     pub c3: BigInt,
 }
 
+pub struct PartialBlindedSig {
+    pub c3: BigInt,
+    pub r: BigInt,
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct Party2Private {
     x2: Scalar<Secp256k1>,
@@ -419,6 +424,41 @@ impl PartialSig {
         //c3:
         PartialSig {
             c3: Paillier::add(ek, c2, c1).0.into_owned(),
+        }
+    }
+
+    pub fn compute_blinded(
+        ek: &EncryptionKey,
+        encrypted_secret_share: &BigInt,
+        local_share: &Party2Private,
+        ephemeral_local_share: &EphEcKeyPair,
+        ephemeral_other_public_share: &Point<Secp256k1>,
+        message: &BigInt,
+    ) -> PartialBlindedSig {
+        let q = Scalar::<Secp256k1>::group_order();
+        //compute r = k2* R1
+        let r = ephemeral_other_public_share * &ephemeral_local_share.secret_share;
+
+        let rx = r.x_coord().unwrap().mod_floor(q);
+        let rho = BigInt::sample_below(&q.pow(2));
+        let k2_inv = BigInt::mod_inv(&ephemeral_local_share.secret_share.to_bigint(), q).unwrap();
+        let partial_sig = rho * q + BigInt::mod_mul(&k2_inv, message, q);
+
+        let c1 = Paillier::encrypt(ek, RawPlaintext::from(partial_sig));
+        let v = BigInt::mod_mul(
+            &k2_inv,
+            &BigInt::mod_mul(&rx, &local_share.x2.to_bigint(), q),
+            q,
+        );
+        let c2 = Paillier::mul(
+            ek,
+            RawCiphertext::from(encrypted_secret_share.clone()),
+            RawPlaintext::from(v),
+        );
+        //c3:
+        PartialBlindedSig {
+            c3: Paillier::add(ek, c2, c1).0.into_owned(),
+            r: rx
         }
     }
 }
