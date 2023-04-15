@@ -79,7 +79,7 @@ pub struct PartialSig {
 }
 
 pub struct PartialBlindedSig {
-    pub c3: BigInt,
+    pub c4: BigInt,
     pub r: BigInt,
 }
 
@@ -434,6 +434,7 @@ impl PartialSig {
         ephemeral_local_share: &EphEcKeyPair,
         ephemeral_other_public_share: &Point<Secp256k1>,
         message: &BigInt,
+        blinding_factor: &BigInt,
     ) -> PartialBlindedSig {
         let q = Scalar::<Secp256k1>::group_order();
         //compute r = k2* R1
@@ -455,9 +456,13 @@ impl PartialSig {
             RawCiphertext::from(encrypted_secret_share.clone()),
             RawPlaintext::from(v),
         );
-        //c3:
+
+        let c3 = Paillier::add(ek, c2, c1);
+
+        let c4 = Paillier::mul(ek, c3, RawPlaintext::from(blinding_factor)).0.into_owned();
+
         PartialBlindedSig {
-            c3: Paillier::add(ek, c2, c1).0.into_owned(),
+            c4,
             r: rx
         }
     }
