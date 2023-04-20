@@ -95,6 +95,10 @@ pub struct Signature {
     pub r: BigInt,
 }
 
+pub struct BlindedSignature {
+    pub s: BigInt,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Party1Private {
     x1: FE,
@@ -513,6 +517,29 @@ impl Signature {
         let s = cmp::min(s_tag_tag_bn.clone(), FE::q().clone() - s_tag_tag_bn.clone());
 
         Signature { s, r: rx }
+    }
+
+    pub fn compute_blinded(
+        party_one_private: &Party1Private,
+        partial_sig_c3: &BigInt,
+        ephemeral_local_share: &EphEcKeyPair,
+    ) -> BlindedSignature {
+        let mut k1_inv = ephemeral_local_share.secret_share.invert();
+
+        let s_tag = Paillier::decrypt(
+            &party_one_private.paillier_priv,
+            &RawCiphertext::from(partial_sig_c3),
+        )
+        .0;
+        let mut s_tag_fe: FE = ECScalar::from(&s_tag);
+        let s_tag_tag = s_tag_fe * k1_inv;
+        k1_inv.zeroize();
+        s_tag_fe.zeroize();
+        let s_tag_tag_bn = s_tag_tag.to_big_int();
+
+        let s = cmp::min(s_tag_tag_bn.clone(), FE::q().clone() - s_tag_tag_bn.clone());
+
+        BlindedSignature { s }
     }
 
     pub fn compute_with_recid(
